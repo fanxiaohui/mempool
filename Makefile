@@ -1,8 +1,8 @@
 CC = gcc
 
 #for release version, use -O/2 or other parameters for optimization!
-#FLAG1 = -O2 -Wmissing-declarations
-FLAG1 = -g
+FLAG1 = -O2 -Wmissing-declarations
+#FLAG1 = -g
 
 SHELL = /bin/sh
 
