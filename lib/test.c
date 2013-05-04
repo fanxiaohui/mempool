@@ -237,7 +237,7 @@ int main(int argc, char *argv[])
 //	init_log();
 
 	mempool test_pool = NULL;
-	test_pool = mempool_init(pool_size, 2/*thread share type*/, NULL, NULL, NULL);
+	test_pool = mempool_init(pool_size, true, LINK_POOL, NULL, NULL, NULL);
 	if(!test_pool){
 		printf("failed on pool create!\n");
 		exit(1);	

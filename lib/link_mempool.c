@@ -833,7 +833,7 @@ static mempool link_mempool_allocator(size_t pool_size, bool pool_lock,
 	return p;
 }
 
-mempool mempool_init(size_t pool_size, bool pool_lock,
+mempool link_mempool_init(size_t pool_size, bool pool_lock,
 			mempool_alloc_fn chunk_alloc_fn,
 			mempool_chunk_free_fn chunk_free_fn,
 			mempool_pool_free_fn pool_free_fn)

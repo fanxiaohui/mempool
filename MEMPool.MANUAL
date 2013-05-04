@@ -6,9 +6,14 @@ struct mempool_class {
 	struct mempool_func m_func;	//metholds for the memory pool
 };
 
-Function mempool mempool_init(size_t size, bool pool_share, mempool_alloc_fn chunk_alloc, mempool_chunk_free_fn chunk_free, mempool_pool_free_fn pool_destory) is used to init new mempool.
+Function 
+mempool
+mempool_init(size_t size, bool pool_share, POOL_TYPE pool_type, 
+	mempool_alloc_fn chunk_alloc, mempool_chunk_free_fn chunk_free, 
+	mempool_pool_free_fn pool_destory);
+is used to init new mempool.
 
-Parameter size is the size of pre-allocated memory pool space. pool_share indicates if the mempool should be shared between threads/processes. chunk_alloc, chunk_free and pool_destory are the interfaces of created memory pool. You could provide your own memory allocation functions for the mempool, or you could set NULL for these parameters and use the default metholds provided by this memory pool lib.
+Parameter size is the size of pre-allocated memory pool space. pool_share indicates if the mempool should be shared between threads/processes. pool_type tells mempool lib which kind of memory pool user wants. chunk_alloc, chunk_free and pool_destory are the interfaces of created memory pool. You could provide your own memory allocation functions for the mempool, or you could set NULL for these parameters and use the default metholds provided by this memory pool lib.
 
 ----------------------------------------------------------------------------
 

@@ -18,7 +18,7 @@ MKPROTO_SH = $(srcdir)/mkproto.sh
 
 INCLUDE = ./include
 
-MEMOBJ = lib/link_mempool.o lib/lock.o
+MEMOBJ = lib/mempool.o lib/link_mempool.o lib/lock.o
 
 TESTOBJ = lib/test.o
 

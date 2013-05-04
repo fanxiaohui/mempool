@@ -21,6 +21,9 @@
 #define ALIGN_SIZE 	64	//should be the power of 2!
 #define size_align(p) (((uintptr_t)(p) + ((uintptr_t)ALIGN_SIZE - 1))&~((uintptr_t)ALIGN_SIZE - 1))
 
+#define LINK_MEMPOOL		0
+#define CUSTOMIZE_MEMPOOL	1
+
 #ifdef __cplusplus
 extern "C"{
 #endif
@@ -46,7 +49,17 @@ struct mempool_class {
 	struct mempool_func m_func;
 };
 
-extern mempool mempool_init(size_t , bool , mempool_alloc_fn ,
+typedef enum {
+	POOL_TYPE_MIN = -1,
+	LINK_POOL = LINK_MEMPOOL,
+	POOL_CUSTOMIZE = CUSTOMIZE_MEMPOOL,
+	POOL_TYPE_MAX,
+}POOL_TYPE;
+
+extern mempool mempool_init(size_t , bool , POOL_TYPE ,
+			mempool_alloc_fn , mempool_chunk_free_fn , mempool_pool_free_fn);
+
+extern mempool link_mempool_init(size_t , bool , mempool_alloc_fn ,
 			mempool_chunk_free_fn , mempool_pool_free_fn );
 
 #ifdef __cplusplus
