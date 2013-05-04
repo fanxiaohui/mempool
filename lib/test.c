@@ -8,6 +8,7 @@
 #include <string.h>
 
 #include "mempool.h"
+#include "link_mempool.h"
 
 #define nthread 100
 
@@ -159,11 +160,6 @@ static void sim_test(mempool pool, int round, size_t base)
 	round = round;
 
 	for(i=0; i<round; i++){
-		if(i == 218)
-			printf("debug\n");
-
-		printf("\n####%d####\n", i);
-
 		alloc_size = i*20 + base;
 		
 		p = pool->m_func.chunk_alloc((link_mempool)pool->m_pool, alloc_size);
@@ -173,15 +169,14 @@ static void sim_test(mempool pool, int round, size_t base)
 //			mempool_map(pool);
 			exit(1);
 		}
-		printf("%d alloc done\n", i);
+//		printf("%d alloc done\n", i);
 
 		if(i%2 == 0){
-			printf("%d will be free\n", i);
+//			printf("%d will be free\n", i);
 			pool->m_func.chunk_free((link_mempool)pool->m_pool, p);
 	
 		//	mempool_map(pool);
 		}
-		printf("#####out %d#####\n", i);
 	}
 
 //	mempool_map(pool);
@@ -242,7 +237,7 @@ int main(int argc, char *argv[])
 //	init_log();
 
 	mempool test_pool = NULL;
-	test_pool = link_mempool_init(pool_size, 2/*thread share type*/, NULL, NULL, NULL, NULL);
+	test_pool = mempool_init(pool_size, 2/*thread share type*/, NULL, NULL, NULL);
 	if(!test_pool){
 		printf("failed on pool create!\n");
 		exit(1);	
@@ -261,7 +256,7 @@ int main(int argc, char *argv[])
 	thread_test(test_pool);
 
 	//simulation test
-	//sim_test(test_pool, roundnum, size_base);
+	sim_test(test_pool, roundnum, size_base);
 
 	test_pool->m_func.pool_free(test_pool->m_pool);
 	printf("done pool distroy!\n");

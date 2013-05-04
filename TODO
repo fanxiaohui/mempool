@@ -1,0 +1,11 @@
+1. This mempool uses pthread lib and share memory to implement the lock mechanism. Need to write our own mempool lock algorithm.
+
+2. Finish the utility functions so that the memory leak and using status could be tracked.
+
+3. Implement other memory allocation algorithms for this mempool lib.
+
+4. Need a better way to generate the uniq index for created mempool.
+
+Please feel free to contact me.
+Author: BJ Wu
+Email: scu.bjwu@gmail.com

@@ -11,7 +11,7 @@
 extern "C"{
 #endif
 
-typedef struct mem_lock_t *lock_entry;
+typedef struct mem_lock_t *lock_entity;
 
 struct mem_lock_t {
 	void *lock_addr;
@@ -19,18 +19,18 @@ struct mem_lock_t {
 };
 
 //locking func prototype
-typedef void (*lock_entry_init_fn) (char *, void **, int );
-typedef void (*pool_lock_init_fn) (lock_entry);
-typedef void (*chain_lock_init_fn) (lock_entry);
-typedef void (*pool_lock_fn) (lock_entry);
-typedef void (*chain_lock_fn) (lock_entry);
-typedef void (*pool_unlock_fn) (lock_entry);
-typedef void (*chain_unlock_fn) (lock_entry);
-typedef void (*pool_lock_free_fn) (lock_entry);
-typedef void (*chain_lock_free_fn) (lock_entry);
+typedef void (*lock_entity_init_fn) (char *, void **, int );
+typedef void (*pool_lock_init_fn) (lock_entity);
+typedef void (*chain_lock_init_fn) (lock_entity);
+typedef void (*pool_lock_fn) (lock_entity);
+typedef void (*chain_lock_fn) (lock_entity);
+typedef void (*pool_unlock_fn) (lock_entity);
+typedef void (*chain_unlock_fn) (lock_entity);
+typedef void (*pool_lock_free_fn) (lock_entity);
+typedef void (*chain_lock_free_fn) (lock_entity);
 
 struct lock_ops {
-	lock_entry_init_fn 	e_lock_init;
+	lock_entity_init_fn 	e_lock_init;
 	pool_lock_init_fn	p_lock_init;
 	chain_lock_init_fn	c_lock_init;
 	pool_lock_fn		p_lock;
@@ -41,7 +41,7 @@ struct lock_ops {
 	chain_lock_free_fn	c_destory;
 };
 
-struct lock_ops *lock_init(bool type);
+extern struct lock_ops *lock_init(bool type);
 
 #ifdef __cplusplus
 }

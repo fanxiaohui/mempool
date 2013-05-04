@@ -26,10 +26,6 @@ typedef struct lock_ops		*mempool_lock_ops;
 typedef u_char *link_mem_addr;	
 
 typedef void * (*mempool_priv_alloc_fn) (size_t);	//memory alloc func used in mempool
-typedef struct mempool_t * (*mempool_create_fn) (size_t);	//mempool creation func
-typedef struct mem_chunk * (*mempool_alloc_fn) (struct mempool_t *, size_t);	//alloc chunk from mempool func
-typedef void (*mempool_chunk_free_fn) (struct mempool_t *, struct mem_chunk *);	//free chunk func
-typedef void (*mempool_pool_free_fn) (struct mempool_t *);	//free mempool func
 
 struct mem_chunk {
 	size_t chunk_size;

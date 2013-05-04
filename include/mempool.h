@@ -25,15 +25,14 @@
 extern "C"{
 #endif
 
-#include "lock.h"
-#include "link_mempool.h"
-
 typedef struct mempool_class	*mempool;
+
+typedef void * (*mempool_alloc_fn) (void *m_pool , size_t);	//alloc chunk from mempool func
+typedef void (*mempool_chunk_free_fn) (void *m_pool, void *chunk);	//free chunk func
+typedef void (*mempool_pool_free_fn) (void *m_pool);	//free mempool func
 
 //contain the basic funcs decelarations for mempool
 struct mempool_func {
-	mempool_create_fn	pool_create;
-	
 	mempool_alloc_fn	chunk_alloc;
 	
 	mempool_chunk_free_fn	chunk_free;
@@ -47,7 +46,7 @@ struct mempool_class {
 	struct mempool_func m_func;
 };
 
-mempool link_mempool_init(size_t , bool , mempool_create_fn , mempool_alloc_fn ,
+extern mempool mempool_init(size_t , bool , mempool_alloc_fn ,
 			mempool_chunk_free_fn , mempool_pool_free_fn );
 
 #ifdef __cplusplus

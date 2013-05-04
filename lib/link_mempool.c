@@ -10,6 +10,8 @@
 #include <unistd.h>
 
 #include "mempool.h"
+#include "lock.h"
+#include "link_mempool.h"
 
 static inline void *link_priv_alloc(size_t );
 static link_mempool pool_create(size_t );
@@ -22,8 +24,8 @@ static link_mem_chunk chunk_split(link_mem_chunk , size_t );
 static link_mem_chunk search_normal_pool(link_intra_mempool , size_t , bool );
 static link_mem_chunk make_empty_chunk(void);
 static link_mem_chunk mempool_real_alloc(size_t );
-static link_mem_chunk mempool_alloc(link_mempool , size_t );
-static void mem_chunk_free(link_mempool , link_mem_chunk );
+static void *mempool_alloc(void *, size_t );
+static void mem_chunk_free(void *, void * );
 static void free2NP(link_mempool , link_mem_chunk );
 static void node_insert(link_intra_mempool , link_mem_chunk , link_mem_chunk );
 static void insert2chain(link_intra_mempool , link_mem_chunk , int , int );
@@ -35,9 +37,10 @@ static void add_chunk2NP(link_intra_mempool , link_mem_chunk );
 static void add_chunk2NP_fast(link_intra_mempool , link_mem_chunk );
 static void freeChunk(link_mem_chunk );
 static void freeChain(link_intra_mempool , mempool_lock_ops );
-static void destory_pool(link_mempool );
-static mempool link_mempool_allocator(size_t , bool , mempool_create_fn ,mempool_alloc_fn ,
-				mempool_chunk_free_fn , mempool_pool_free_fn , mempool_priv_alloc_fn );
+static void destory_pool(void *);
+static mempool link_mempool_allocator(size_t , bool , mempool_alloc_fn , mempool_chunk_free_fn ,
+       				mempool_pool_free_fn , mempool_priv_alloc_fn );
+
 /*
  *	1. do we need a way to manage all mempool created?
  *	2. need a better way to generate index for each mempool
@@ -378,17 +381,19 @@ static link_mem_chunk mempool_real_alloc(size_t size)
 	return p;
 }
 
-static link_mem_chunk mempool_alloc(link_mempool pool, size_t size)
+static void *mempool_alloc(void *mp, size_t size)
 {
+    	link_mempool pool = (link_mempool)mp;
+
 //must put locks here and make sure there are in pair-wise
 	if(size == 0)
 		return	make_empty_chunk();
 
 	size = size_align(size);
 	
-	exec_lock_fn(pool->m_ops->p_lock, (lock_entry)pool->T_POOL);
+	exec_lock_fn(pool->m_ops->p_lock, (lock_entity)pool->T_POOL);
 	if(size > pool->mem_left){
-		exec_lock_fn(pool->m_ops->p_unlock, (lock_entry)pool->T_POOL);
+		exec_lock_fn(pool->m_ops->p_unlock, (lock_entity)pool->T_POOL);
 		mem_print("%d out pool size(%s)\n", size, __location__);
 		goto FAIL_ALLOC;
 	}
@@ -402,9 +407,9 @@ static link_mem_chunk mempool_alloc(link_mempool pool, size_t size)
 	real_alloc = (tmp_res >= 0)?true:false;
 
 //search high cach pool first!
-	exec_lock_fn(pool->m_ops->c_lock, (lock_entry)pool->high_cache_pool->T_CHAIN);
+	exec_lock_fn(pool->m_ops->c_lock, (lock_entity)pool->high_cache_pool->T_CHAIN);
 	p = search_high_cache_pool(pool->high_cache_pool, size);
-	exec_lock_fn(pool->m_ops->c_unlock, (lock_entry)pool->high_cache_pool->T_CHAIN);
+	exec_lock_fn(pool->m_ops->c_unlock, (lock_entity)pool->high_cache_pool->T_CHAIN);
 
 	if(p){
 		mem_print("alloc from HP\n");
@@ -412,9 +417,9 @@ static link_mem_chunk mempool_alloc(link_mempool pool, size_t size)
 	}
 	
 //nothing found in HP... we need to tell if we could do allocation in real memory space in advance	
-	exec_lock_fn(pool->m_ops->c_lock, (lock_entry)pool->normal_pool->T_CHAIN);
+	exec_lock_fn(pool->m_ops->c_lock, (lock_entity)pool->normal_pool->T_CHAIN);
 	p = search_normal_pool(pool->normal_pool, size, real_alloc);
-	exec_lock_fn(pool->m_ops->c_unlock, (lock_entry)pool->normal_pool->T_CHAIN);
+	exec_lock_fn(pool->m_ops->c_unlock, (lock_entity)pool->normal_pool->T_CHAIN);
 	
 	if(p){
 		mem_print("alloc from NP!\n");
@@ -424,7 +429,7 @@ static link_mem_chunk mempool_alloc(link_mempool pool, size_t size)
 		if(!real_alloc){
 			mem_print("pool_size left: %d size:%d failed in alloc(%s)\n", 
 				pool->real_mem_left, size, __location__);
-			exec_lock_fn(pool->m_ops->p_unlock, (lock_entry)pool->T_POOL);
+			exec_lock_fn(pool->m_ops->p_unlock, (lock_entity)pool->T_POOL);
 			goto FAIL_ALLOC;
 		}
 	}
@@ -432,7 +437,7 @@ static link_mem_chunk mempool_alloc(link_mempool pool, size_t size)
 //nothing found in normal pool, but luck we have space in real memory space
 	p = make_mem_chunk(size);
 	if(!p){
-		exec_lock_fn(pool->m_ops->p_unlock, (lock_entry)pool->T_POOL);
+		exec_lock_fn(pool->m_ops->p_unlock, (lock_entity)pool->T_POOL);
 		return NULL;
 	}
 
@@ -448,7 +453,7 @@ static link_mem_chunk mempool_alloc(link_mempool pool, size_t size)
 DONE_ALLOC:
 //mem_print("mem left: %d\twill alloc size: %d\n", pool->mem_left, size);
 	pool->mem_left -= p->chunk_size;
-	exec_lock_fn(pool->m_ops->p_unlock, (lock_entry)pool->T_POOL);
+	exec_lock_fn(pool->m_ops->p_unlock, (lock_entity)pool->T_POOL);
 	
 	return p;
 
@@ -456,20 +461,23 @@ FAIL_ALLOC:
 	return mempool_real_alloc(size);
 }
 
-static void mem_chunk_free(link_mempool pool, link_mem_chunk chunk)
+static void mem_chunk_free(void *p, void *c)
 {
+    	link_mempool pool = (link_mempool)p;
+	link_mem_chunk chunk = (link_mem_chunk)c;
+
 //0 size chunk
 	if(chunk->chunk_size == 0){
-		free(chunk);
-		chunk = NULL;
+		free(c);
+		c = NULL;
 		return;
 	}
 //chunk alloc by real alloc methold	
 	if(chunk->data_end == NULL){
 		free(chunk->data_start);
 		chunk->data_start = NULL;
-		free(chunk);
-		chunk = NULL;
+		free(c);
+		c = NULL;
 		return;
 	}
 //chunk alloc by our mempool
@@ -487,16 +495,16 @@ static void mem_chunk_free(link_mempool pool, link_mem_chunk chunk)
 	free2NP(pool, chunk);
 		
 DONE_FREE:
-	exec_lock_fn(pool->m_ops->p_lock, (lock_entry)pool->T_POOL);
+	exec_lock_fn(pool->m_ops->p_lock, (lock_entity)pool->T_POOL);
 	pool->mem_left += size;
-	exec_lock_fn(pool->m_ops->p_unlock, (lock_entry)pool->T_POOL);
+	exec_lock_fn(pool->m_ops->p_unlock, (lock_entity)pool->T_POOL);
 }
 
 static void free2NP(link_mempool pool, link_mem_chunk node)
 {
-	exec_lock_fn(pool->m_ops->c_lock, (lock_entry)pool->normal_pool->T_CHAIN);
+	exec_lock_fn(pool->m_ops->c_lock, (lock_entity)pool->normal_pool->T_CHAIN);
 	add_chunk2NP(pool->normal_pool, node);
-	exec_lock_fn(pool->m_ops->c_unlock, (lock_entry)pool->normal_pool->T_CHAIN);
+	exec_lock_fn(pool->m_ops->c_unlock, (lock_entity)pool->normal_pool->T_CHAIN);
 }
 
 static void node_insert(link_intra_mempool chain, link_mem_chunk point, link_mem_chunk node)
@@ -601,12 +609,12 @@ static void add_chunk2HP(link_intra_mempool chain, link_mem_chunk node)
 static bool free2HP(link_mempool pool, link_mem_chunk p)
 {
 //mem_print("=======>%s\n", __FUNCTION__);
-	exec_lock_fn(pool->m_ops->c_lock, (lock_entry)pool->high_cache_pool->T_CHAIN);
+	exec_lock_fn(pool->m_ops->c_lock, (lock_entity)pool->high_cache_pool->T_CHAIN);
 	
 	if(pool->high_cache_pool->head == NULL){
 	//hp has no member, so just insert the node to hp
 		add_chunk2HP(pool->high_cache_pool, p);
-		exec_lock_fn(pool->m_ops->c_unlock, (lock_entry)pool->high_cache_pool->T_CHAIN);
+		exec_lock_fn(pool->m_ops->c_unlock, (lock_entity)pool->high_cache_pool->T_CHAIN);
 
 		return true;
 	}
@@ -614,13 +622,13 @@ static bool free2HP(link_mempool pool, link_mem_chunk p)
 	if(pool->high_cache_pool->pool_member < MAX_HP_MEMBER){	//have space in hp to add a new chunk
 //TODO: Is link structrue the best for hp?
 		add_chunk2HP(pool->high_cache_pool, p);
-		exec_lock_fn(pool->m_ops->c_unlock, (lock_entry)pool->high_cache_pool->T_CHAIN);
+		exec_lock_fn(pool->m_ops->c_unlock, (lock_entity)pool->high_cache_pool->T_CHAIN);
 		
 		return true;
 	}
 	else{	//HP pool is full...
 		if(p->match <= pool->high_cache_pool->tail->match){	//the chunk is not fittble for hp
-			exec_lock_fn(pool->m_ops->c_unlock, (lock_entry)pool->high_cache_pool->T_CHAIN);
+			exec_lock_fn(pool->m_ops->c_unlock, (lock_entity)pool->high_cache_pool->T_CHAIN);
 			return false;
 		}
 	//do not have space in hp, so do node exchange
@@ -633,12 +641,12 @@ static bool free2HP(link_mempool pool, link_mem_chunk p)
 		pool->high_cache_pool->pool_member--;
 		
 		add_chunk2HP(pool->high_cache_pool, p);	//then add the new chunk to HP
-		exec_lock_fn(pool->m_ops->c_unlock, (lock_entry)pool->high_cache_pool->T_CHAIN);
+		exec_lock_fn(pool->m_ops->c_unlock, (lock_entity)pool->high_cache_pool->T_CHAIN);
 		
 		//last add the removed hp chunk to np
-		exec_lock_fn(pool->m_ops->c_lock, (lock_entry)pool->normal_pool->T_CHAIN);
+		exec_lock_fn(pool->m_ops->c_lock, (lock_entity)pool->normal_pool->T_CHAIN);
 		add_chunk2NP(pool->normal_pool, tmp_HP);
-		exec_lock_fn(pool->m_ops->c_unlock, (lock_entry)pool->normal_pool->T_CHAIN);
+		exec_lock_fn(pool->m_ops->c_unlock, (lock_entity)pool->normal_pool->T_CHAIN);
 		
 		return true;
 	}
@@ -755,14 +763,16 @@ static void freeChain(link_intra_mempool chain, mempool_lock_ops lock_ops)
 		p = tmp;
 	}
 	
-	exec_lock_fn(lock_ops->c_destory, (lock_entry)chain->T_CHAIN);
+	exec_lock_fn(lock_ops->c_destory, (lock_entity)chain->T_CHAIN);
 
 	free(chain);
 	chain = NULL;
 }
 
-static void destory_pool(link_mempool pool)
+static void destory_pool(void *p)
 {
+    	link_mempool pool = (link_mempool)p;
+
 //free chain first
 	freeChain(pool->high_cache_pool, pool->m_ops);
 	freeChain(pool->normal_pool, pool->m_ops);
@@ -779,14 +789,13 @@ static void destory_pool(link_mempool pool)
 	free(pool->mem_name);
 	pool->mem_name = NULL;
 	
-	exec_lock_fn(pool->m_ops->p_destory, (lock_entry)pool->T_POOL);
+	exec_lock_fn(pool->m_ops->p_destory, (lock_entity)pool->T_POOL);
 
-	free(pool);
-	pool = NULL;
+	free(p);
+	p = NULL;
 }
 
 static mempool link_mempool_allocator(size_t pool_size, bool pool_lock,
-			mempool_create_fn pool_create_fn,
 			mempool_alloc_fn chunk_alloc_fn,
 			mempool_chunk_free_fn chunk_free_fn,
 			mempool_pool_free_fn pool_free_fn,
@@ -800,11 +809,10 @@ static mempool link_mempool_allocator(size_t pool_size, bool pool_lock,
 			return NULL;
 	}
 	
-	p->m_pool = (link_mempool)pool_create_fn(pool_size);
+	p->m_pool = pool_create(pool_size);
 	if(p->m_pool == NULL)
 		return NULL;
 		
-	p->m_func.pool_create = pool_create_fn;
 	p->m_func.chunk_alloc = chunk_alloc_fn;
 	p->m_func.chunk_free = chunk_free_fn;
 	p->m_func.pool_free = pool_free_fn;
@@ -812,31 +820,29 @@ static mempool link_mempool_allocator(size_t pool_size, bool pool_lock,
 	link_mempool tmp = (link_mempool)p->m_pool;
 	tmp->m_ops = lock_init(pool_lock);
 	
-	//init lock entry first
+	//init lock entity first
 	exec_lock_fn(tmp->m_ops->e_lock_init, tmp->mem_name, &(tmp->T_POOL), 0);
 	exec_lock_fn(tmp->m_ops->e_lock_init, tmp->mem_name, &(tmp->high_cache_pool->T_CHAIN), 1);
 	exec_lock_fn(tmp->m_ops->e_lock_init, tmp->mem_name, &(tmp->normal_pool->T_CHAIN), 2);
 	
 	//init lock
-	exec_lock_fn(tmp->m_ops->p_lock_init, (lock_entry)tmp->T_POOL);
-	exec_lock_fn(tmp->m_ops->c_lock_init, (lock_entry)tmp->high_cache_pool->T_CHAIN);
-	exec_lock_fn(tmp->m_ops->c_lock_init, (lock_entry)tmp->normal_pool->T_CHAIN);
+	exec_lock_fn(tmp->m_ops->p_lock_init, (lock_entity)tmp->T_POOL);
+	exec_lock_fn(tmp->m_ops->c_lock_init, (lock_entity)tmp->high_cache_pool->T_CHAIN);
+	exec_lock_fn(tmp->m_ops->c_lock_init, (lock_entity)tmp->normal_pool->T_CHAIN);
 	
 	return p;
 }
 
-mempool link_mempool_init(size_t pool_size, bool pool_lock,
-			mempool_create_fn pool_create_fn,
+mempool mempool_init(size_t pool_size, bool pool_lock,
 			mempool_alloc_fn chunk_alloc_fn,
 			mempool_chunk_free_fn chunk_free_fn,
 			mempool_pool_free_fn pool_free_fn)
 {
-	if(!pool_create_fn) pool_create_fn = pool_create;
 	if(!chunk_alloc_fn) chunk_alloc_fn = mempool_alloc;
 	if(!chunk_free_fn)	chunk_free_fn = mem_chunk_free;
 	if(!pool_free_fn)	pool_free_fn = destory_pool;
 	
-	return link_mempool_allocator(pool_size, pool_lock, pool_create_fn, chunk_alloc_fn, 
-								  chunk_free_fn, pool_free_fn, link_priv_alloc);
+	return link_mempool_allocator(pool_size, pool_lock, chunk_alloc_fn, 
+				chunk_free_fn, pool_free_fn, link_priv_alloc);
 }
 
